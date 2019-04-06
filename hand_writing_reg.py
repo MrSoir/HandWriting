@@ -23,9 +23,9 @@ from scipy.stats import norm
 from scipy.stats import t as students_t
 from scipy.stats import norminvgauss as NIG
 import PyQt5.QtWidgets as widgets
-from PyQt5.QtCore import Qt, QObject, pyqtSignal, pyqtSlot
+from PyQt5.QtCore import Qt, QObject, pyqtSignal, pyqtSlot, QSize
 from PyQt5.QtWidgets import QWidget, QApplication, QGridLayout, QLabel
-from PyQt5.QtGui import QBrush, QPen, QColor, QPainter, QPixmap, QImage
+from PyQt5.QtGui import QBrush, QPen, QColor, QPainter, QPixmap, QImage, QIcon
 
 import random
 
@@ -59,6 +59,21 @@ def genColors(ro, rr, go, gr, bo, br, steps = 20):
 #        print(c.name())
 #    print()
     return colors
+
+def setIconToButton(btn, icon_path, size=None):
+    pixmap = QPixmap(icon_path);
+    icon = QIcon(pixmap);
+    btn.setIcon(icon);
+    size = size if size else pixmap.rect().size()
+    btn.setIconSize(size);
+
+
+class HoverButton(widgets.QPushButton):
+    def enterEvent(self, e):
+        try:
+            self.onMouseEntered()
+        except:
+            pass
 
 class MainWindow(QWidget):
     
@@ -116,62 +131,149 @@ class MainWindow(QWidget):
         mainLay.setContentsMargins(0,0,0,0)
         mainLay.setSpacing(0)
         
+        self.optionslay = widgets.QVBoxLayout()
+        self.optionslay.setContentsMargins(0,0,0,0)
+        self.optionslay.setSpacing(0)
+        self.optionswidget = widgets.QWidget()
+        self.optionswidget.setLayout(self.optionslay)
+        self.optionswidget.setMaximumHeight(220)
+        
+        self.canvas = Canvas()
+        self.canvas.setPointsData(self.pages.getPage())
+        self.connectCanvas()
+        
+        mainLay.addWidget(self.canvas)
+        self.genHideBar()
+        mainLay.addWidget(self.optionswidget)
+        self.genDoUndoBar()
+        self.genPageBar()
+        self.genSliderGrid()
+        self.generateColorPicker()
+        self.genColorPickerGrid()
+        self.generateStrokeWidthSlider()
+        self.genSaveBar()
+                
+        self.setLayout(mainLay)
+        
+        self.optionswidget.setVisible(not self.optionsHidden)
+        
+        self.setGeometry(300, 300, 800, 600)
+        self.setWindowTitle('Hand Writing Notes')
+        self.show()
+        
+    def genSliderGrid(self):
         self.slider_grid = widgets.QGridLayout()
+        self.slider_grid.setHorizontalSpacing(0)
+
         self.slider_grid.setContentsMargins(10,10,10,10)
         self.slider_grid.setColumnStretch(0,0)
         self.slider_grid.setColumnStretch(1,1)
         self.slider_grid.setColumnStretch(2,1)
         
-        self.canvas = Canvas()
-        self.rgba_changed_sgnl.connect(self.canvas.rgba_changed)
-        self.stroke_width_changed_sgnl.connect(self.canvas.setStrokeWidth)
-        self.canvas.setPointsData(self.pages.getPage())
+        self.optionslay.addLayout(self.slider_grid)
         
+    def genDoUndoBar(self):
         self.clearBtn = widgets.QPushButton('Clear Canvas')
         self.clearBtn.clicked.connect(self.clearCanvas)
-        self.undoClearBtn = widgets.QPushButton('Undo')
-        self.undoClearBtn.clicked.connect(self.undoClearCanvas)
-        self.redoClearBtn = widgets.QPushButton('Redo')
-        self.redoClearBtn.clicked.connect(self.redoClearCanvas)
+        self.undoBtn = widgets.QPushButton('Undo')
+        self.undoBtn.clicked.connect(self.undo)
+        self.redoBtn = widgets.QPushButton('Redo')
+        self.redoBtn.clicked.connect(self.redo)
         clearlay = widgets.QHBoxLayout()
         clearlay.setSpacing(20)
+        clearlay.setContentsMargins(5,5,5,5)
         clearlay.addWidget(self.clearBtn)
-        clearlay.addWidget(self.undoClearBtn)
-        clearlay.addWidget(self.redoClearBtn)
+        clearlay.addWidget(self.undoBtn)
+        clearlay.addWidget(self.redoBtn)
         
+        self.optionslay.addLayout(clearlay)
+    
+    def genSaveBar(self):
         self.saveBtn = widgets.QPushButton('Save')
-        self.saveBtn.clicked.connect(self.canvas.saveImage)
+        self.saveBtn.clicked.connect(self.save)
+        self.saveAsBtn = widgets.QPushButton('Save As')
+        self.saveAsBtn.clicked.connect(self.saveAs)
+        self.openBtn = widgets.QPushButton('Open')
+        self.openBtn.clicked.connect(self.openPages)
+        savelay = widgets.QHBoxLayout()
+        savelay.setSpacing(20)
+        savelay.setContentsMargins(5,5,5,5)
+        savelay.addWidget(self.saveBtn)
+        savelay.addWidget(self.saveAsBtn)
+        savelay.addWidget(self.openBtn)
         
-        mainLay.addWidget(self.canvas)
-        mainLay.addLayout(clearlay)
-        self.genPageBar()
-        self.generateColorPicker()
-        self.genColorPickerGrid()
-        self.generateMetaSliders()
-        mainLay.addWidget(self.saveBtn)
+        self.optionslay.addLayout(savelay)
+
+    @pyqtSlot()
+    def connectCanvas(self):
+        self.rgba_changed_sgnl.connect(self.canvas.rgba_changed)
+        self.stroke_width_changed_sgnl.connect(self.canvas.setStrokeWidth)
+        self.canvas.dataUpdater = self.pages.updateCurPageData
+        self.canvas.dataRetriever = self.pages.getPage
+        self.pages.page_changed_sgnl.connect(self.canvas.retrieveUpdatedData)
         
-        self.setLayout(mainLay)
-        
-        self.setGeometry(300, 300, 600, 600)
-        self.setWindowTitle('Hand Writing')
-        self.show()
+    @pyqtSlot()
+    def save(self):
+        self.pages.save()
+    @pyqtSlot()
+    def saveAs(self):
+        self.pages.saveAs()
     
     @pyqtSlot()
+    def openPages(self):
+        filepath = self.pages.filePath()
+        newpages = Pages.openFile(filepath)
+        if newpages:
+            self.pages = newpages
+            self.canvas.setPointsData(self.pages.getPage())
+            self.connectCanvas()
+            self.updateControls()
+        else:
+            print('could not open pages')
+            
+    @pyqtSlot()
+    def updateControls(self):
+        self.update_page_le()
+        
+    @pyqtSlot()
     def clearCanvas(self):
-        self.pages.getPage().addCurPointsToBackup()
         self.canvas.clearCanvas()
+
     @pyqtSlot()
-    def undoClearCanvas(self):
-        page = self.pages.getPage()
-        page.undoClearance()
-        self.canvas.setPoints(page.points)
-        self.canvas.reRenderAllPointPaths()
+    def undo(self):
+        self.pages.undo()
     @pyqtSlot()
-    def redoClearCanvas(self):
-        page = self.pages.getPage()
-        page.redoClearance()
-        self.canvas.setPoints(page.points)
-        self.canvas.reRenderAllPointPaths()
+    def redo(self):
+        self.pages.redo()
+        
+    def genHideBar(self):
+        hidelay = widgets.QHBoxLayout()
+        hidelay.setContentsMargins(5,5,5,5)
+        hidelay.setSpacing(0)
+        
+        self.optionsHidden = True
+        
+        self.hideOptionsBtn = HoverButton()
+        self.hideOptionsBtn.onMouseEntered = self.hideOptions
+        self.setHideButtonIcon()
+        
+        hidelay.addWidget(self.hideOptionsBtn)
+        self.mainLay.addLayout(hidelay)
+    
+    def setHideButtonIcon(self):
+        icon_path = "pics/arrow_{0}.png".format("up" if self.optionsHidden else "down")
+        setIconToButton(self.hideOptionsBtn, icon_path, QSize(200,30))
+
+    @pyqtSlot()
+    def hideOptions(self):
+        self.optionsHidden = not self.optionsHidden
+        self.setHideButtonIcon()
+        self.setHideOptionsBtnIcon()
+    def setHideOptionsBtnIcon(self):
+        if self.optionsHidden:
+            self.optionswidget.setVisible(False)
+        else:
+            self.optionswidget.setVisible(True)        
         
     def genColorPickerGrid(self):
         colgrid = widgets.QGridLayout()
@@ -200,17 +302,16 @@ class MainWindow(QWidget):
         self.grn.setValue( int(g / 255 * (self.grn.maximum()-self.grn.minimum())) )
         self.blu.setValue( int(b / 255 * (self.blu.maximum()-self.blu.minimum())) )
         self.alp.setValue( int(a / 255 * (self.alp.maximum()-self.alp.minimum())) )
-#        self.red.value(), self.grn.value(), self.blu.value(), self.alp.value()
-#        self.canvas.setPenColor(col)
         
     def genColorButton(self, col):
         btn = widgets.QPushButton()
         btn.setStyleSheet( "QPushButton {" + " background-color : {0}".format(col.name()) + "; } " )
         setPenCol = lambda: self.setPenColor(col.name())
         btn.clicked.connect(setPenCol)
+        btn.setMinimumWidth(10)
         return btn
     
-    def generateMetaSliders(self):
+    def generateStrokeWidthSlider(self):
         grid = self.slider_grid
         
         self.stroke_fctr = 10
@@ -268,9 +369,7 @@ class MainWindow(QWidget):
         lay.addWidget(grn, 1, 1)#, Qt.AlignLeft)
         lay.addWidget(blu, 2, 1)#, Qt.AlignLeft)
         lay.addWidget(alp, 3, 1)#, Qt.AlignLeft)
-        
-        self.mainLay.addLayout(grid)
-    
+            
     def genSlider(self):
         sldr = widgets.QSlider(Qt.Horizontal)
         sldr.setMaximumWidth(200)
@@ -295,12 +394,13 @@ class MainWindow(QWidget):
         
         pagelay = widgets.QHBoxLayout()
         pagelay.setSpacing(10)
+        pagelay.setContentsMargins(5,5,5,5)
         pagelay.addWidget(prev)
         pagelay.addWidget(nxt)
         pagelay.addWidget(page_lbl)
         pagelay.addWidget(page)
         
-        self.mainLay.addLayout(pagelay)
+        self.optionslay.addLayout(pagelay)
     
     def update_page_le(self):
         self.page_le.setText( '{0}'.format(self.pages.getPageId()+1) )
@@ -308,21 +408,13 @@ class MainWindow(QWidget):
     @pyqtSlot(int)
     def pageChanged(self, page_id):
         self.update_page_le()
-        cur_page = self.pages.getPage()
-        self.canvas.setPointsData( cur_page )
-    
-    def savePageData(self):
-        page_data = self.canvas.getPointsData()
-        self.pages.updateCurPageData(page_data)
     
     @pyqtSlot()
     def nextPage(self):
-        self.savePageData()
         self.pages.nextPage()
     
     @pyqtSlot()
     def prevPage(self):
-        self.savePageData()
         self.pages.prevPage()
     
     @pyqtSlot('QString')
@@ -330,7 +422,6 @@ class MainWindow(QWidget):
         try:
             page_id = int(page_str) - 1 # auf 0 indexiert, linedit aber auf  indexiert
             if self.pages.getPageId() != page_id:
-                self.savePageData()
                 self.setPage_hlpr(page_id)
         except:
             pass
@@ -355,3 +446,4 @@ if __name__ == '__main__':
     app = widgets.QApplication(sys.argv)
     ex = MainWindow()
     sys.exit(app.exec_())
+    input("Press Enter to continue...")

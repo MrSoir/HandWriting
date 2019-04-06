@@ -115,6 +115,22 @@ class Canvas(widgets.QWidget):
             self.initImage()
     def getPointsData(self):
         return PointsData(self.points, self.img)
+    
+    @pyqtSlot()
+    def retrieveUpdatedData(self):
+        try:
+            data = self.dataRetriever()
+            self.setPointsData(data)
+        except:
+            pass
+    
+    @pyqtSlot()
+    def updateData(self):
+        try:
+            self.dataUpdater(self.getPointsData())
+        except:
+            pass
+    
     def getPoints(self):
         return self.points
     
@@ -205,11 +221,12 @@ class Canvas(widgets.QWidget):
     
     @pyqtSlot()
     def clearCanvas(self):
-        self.clearPoints()
-        self.clearImg()
+        self._clearPoints()
+        self._clearImg()
+        self.updateData()
         self.update()
     
-    def clearImg(self):
+    def _clearImg(self):
         if self.img.isNull():
             return
         painter = QPainter(self.img)
@@ -218,7 +235,7 @@ class Canvas(widgets.QWidget):
         painter.end()
         del painter
         
-    def clearPoints(self):
+    def _clearPoints(self):
         self.points.clear()
         self.curDragPoints.clear()
         
@@ -260,7 +277,7 @@ class Canvas(widgets.QWidget):
     @pyqtSlot()
     def reRenderAllPointPaths(self):
         self.rubberMode = False
-        self.clearImg()
+        self._clearImg()
         for pnts in self.points:
             self.drawFinalizedPoints(pnts)
         
@@ -271,7 +288,7 @@ class Canvas(widgets.QWidget):
                 self.drawLinesOnImage( pntsToDraw )
             elif pnts_cnt == 1:
                 self.drawPointOnImage( pntsToDraw[0] )
-        
+        self.updateData()
         self.update()
         
     def mouseMovePressed(self, e):
