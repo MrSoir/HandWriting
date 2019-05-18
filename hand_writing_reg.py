@@ -319,7 +319,7 @@ class MainWindow(QWidget):
         sw = self.genSlider()#widgets.QSlider(Qt.Horizontal)
         sw.setValue( self.canvas.strokeWidth() * self.stroke_fctr )
         
-        sw.setMinimum( int(0.5 * self.stroke_fctr) )
+        sw.setMinimum( int(1 * self.stroke_fctr) )
         sw.setMaximum( int(20 * self.stroke_fctr) )
         sw.valueChanged.connect( self.stroke_width_changed )
         
